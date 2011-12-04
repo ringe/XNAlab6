@@ -11,24 +11,29 @@ using Microsoft.Xna.Framework.Media;
 
 namespace XNAlab6
 {
-    class Cam : Microsoft.Xna.Framework.GameComponent
+    /// <summary>
+    /// This is a game component that implements IUpdateable.
+    /// </summary>
+    public class Camera : Microsoft.Xna.Framework.GameComponent
     {
-        //En referanse til input-komponenten
+        //En referanse til input-komponenten: 
         protected IInputHandler input;
-        private const float moveRate = 20.0f;       
-        protected Vector3 movement = Vector3.Zero; 
+        private const float moveRate = 20.0f;      // for FirstPersonCamra. 
+        protected Vector3 movement = Vector3.Zero; // for FirstPersonCamera.
+        protected float[,] heightData; // for FirstPersonCamera
 
         private GraphicsDeviceManager graphics;
         private Matrix projection;
         private Matrix view;
-        private Vector3 cameraPosition = new Vector3(0.0f, 0.0f, 10.0f);
-        private Vector3 cameraTarget = Vector3.Zero;
+        private Vector3 cameraPosition = new Vector3(0f, 2f, 5f);
+        private Vector3 cameraTarget = new Vector3(0f, 0f, 0f);
         private Vector3 cameraUpVector = Vector3.Up;
-        private Vector3 cameraReference = new Vector3(0.0f, 0.0f, -1.0f);
+        private Vector3 cameraReference = new Vector3(0.0f, -0.4f, -1.0f);
         private float cameraYaw = 0.0f;
         private float cameraPitch = 0.0f; 
         private const float spinRate = 40.0f;
 
+        //view og projection-matrisene er tilgjengelig via properties: 
         public Matrix View
         {
             get { return view; }
@@ -41,7 +46,13 @@ namespace XNAlab6
             set { projection = value; }
         }
 
-        public Cam(Game game): base(game)
+        public Vector3 Position
+        {
+            get { return cameraPosition; }
+        }
+
+        public Camera(Game game)
+            : base(game)
         {
             graphics = (GraphicsDeviceManager)game.Services.GetService(typeof(IGraphicsDeviceManager));
             //Henter ut en referanse til input-handleren: 
@@ -65,7 +76,7 @@ namespace XNAlab6
 
         public override void Update(GameTime gameTime)
         {
-            //timeDelta er tiden mellom to kall på Update 
+            //timeDelta = tiden mellom to kall på Update 
             float timeDelta = (float)gameTime.ElapsedGameTime.TotalSeconds;
 
             if (input.MouseState != input.OriginalMouseState)
@@ -74,6 +85,8 @@ namespace XNAlab6
                 float yDifference = input.MouseState.Y - input.OriginalMouseState.Y;
                 cameraYaw -= xDifference;
                 cameraPitch -= yDifference;
+                //leftrightRot -= rotationSpeed * xDifference * amount;
+                //updownRot -= rotationSpeed * yDifference * amount;
                 Mouse.SetPosition(graphics.GraphicsDevice.Viewport.Width / 2, graphics.GraphicsDevice.Viewport.Height / 2);
             }
 
@@ -97,7 +110,7 @@ namespace XNAlab6
             else if (cameraPitch < -89)
                 cameraPitch = -89;
 
-            // Posisjonerer kamera: 
+            // Posisjoner kamera: 
             Matrix rotationMatrix;
 
             //Rotasjonsmatrise om Y-aksen: 
@@ -106,6 +119,7 @@ namespace XNAlab6
             //Legger til pitch dvs. rotasjon om X‐aksen:
             rotationMatrix = Matrix.CreateRotationX(MathHelper.ToRadians(cameraPitch)) * rotationMatrix;
 
+            //FirstPersonCamera, endrer kameraets posisjon: 
             movement *= (moveRate * timeDelta);
             if (movement != Vector3.Zero)
             {
@@ -115,12 +129,18 @@ namespace XNAlab6
                 cameraPosition += movement;
             }
 
+            // Setter posisjonen til bakkenivå
+            if (heightData != null)
+                cameraPosition.Y = heightData[(int)cameraPosition.X, (int)cameraPosition.Z];
+
             // Oppretter en vektor som peker i retninga kameraet 'ser': 
             Vector3 transformedReference;
 
             // Roterer cameraReference-vektoren: 
             Vector3.Transform(ref cameraReference, ref rotationMatrix, out transformedReference);
 
+            // Beregner hva kameraet ser på (cameraTarget) vha.  
+            // nåværende posisjonsvektor og retningsvektoren: 
             Vector3.Add(ref cameraPosition, ref transformedReference, out cameraTarget);
 
             //Oppdaterer view-matrisa vha. posisjons, kameramål og opp-vektorene: 
@@ -128,7 +148,5 @@ namespace XNAlab6
 
             base.Update(gameTime);
         }
-    
-
     }
 }

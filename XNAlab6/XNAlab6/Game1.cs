@@ -12,33 +12,8 @@ using System.Runtime.InteropServices;
 
 namespace XNAlab6
 {
-
-    struct MittVerteksFormat
-    {
-        private Vector3 position;
-        private Color color;
-        private Vector2 texcoord;
-        private Vector3 normal;
-
-        public MittVerteksFormat(Vector3 position, Color color, Vector2 texcoord, Vector3 normal)
-        {
-            this.position = position;
-            this.color = color;
-            this.texcoord = texcoord;
-            this.normal = normal;
-        }
-
-        public readonly static VertexDeclaration VertexDeclaration = new VertexDeclaration(
-            new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
-            new VertexElement(sizeof(float) * 3, VertexElementFormat.Color, VertexElementUsage.Color, 0),
-            new VertexElement(sizeof(float) * 3, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0),
-            new VertexElement(sizeof(float) * 4, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0)
-        );
-    }
-
     public class Game1 : Microsoft.Xna.Framework.Game
     {
-
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern uint MessageBox(IntPtr hWnd, String text, String caption, uint type);
 
@@ -48,45 +23,26 @@ namespace XNAlab6
         SpriteFont spriteFont;
 
         private Input input;
-        private Cam camera;
-
-        VertexPositionColorTexture[] cubeVertices;
-        VertexPositionColorTexture[] cubeVertices2;
-        VertexPositionColor[] xAxis = new VertexPositionColor[2];
-        VertexPositionColor[] yAxis = new VertexPositionColor[2];
-        VertexPositionColor[] zAxis = new VertexPositionColor[2];
+        private Camera camera;
 
         Texture2D texture1;
         Texture2D texture2;
 
         private Effect effect;
-        private EffectParameter effectRed;
-        private EffectParameter effectPos;
         private EffectParameter effectWorld;
         private EffectParameter effectView;
         private EffectParameter effectProjection;
-        private float mfRed = 0f;
-        private bool mbRedIncrease = true;
 
         private Matrix world;
-        private Matrix projection;
-        private Matrix view;
-
-        private Vector3 cameraPosition = new Vector3(5f, 4f, -4f);
-        private Vector3 cameraTarget = Vector3.Zero;
-        private Vector3 cameraUpVector = new Vector3(0.0f, 1.0f, 0.0f);
 
         private const float BOUNDARY = 80.0f;
         private const float EDGE = BOUNDARY * 2.0f;
 
-        float orbRotY;
+        float rotY;
 
         private float speed = 0.02f;
         float elapsedTime;
 
-        TimeSpan fpsTime = TimeSpan.Zero;
-        int frameRate = 0;
-        int frameCounter = 0;
         private Video video;
         private VideoPlayer player;
         private VertexPositionColorTexture[] frontV;
@@ -96,6 +52,9 @@ namespace XNAlab6
         private VertexPositionColorTexture[] topV;
         private Texture2D texture3;
         private Texture2D texture4;
+        private Texture2D surfaceTexture;
+        private Texture2D bottomTexture;
+        private VertexPositionColorTexture[] bottomV;
 
 
         public Game1()
@@ -109,7 +68,7 @@ namespace XNAlab6
             this.Components.Add(input);
 
             //Legger til Cam:
-            camera = new Cam(this);
+            camera = new FirstPersonCamera(this);
             this.Components.Add(camera);
         }
 
@@ -117,8 +76,8 @@ namespace XNAlab6
         {
             base.Initialize();
             InitDevice();
-            InitCamera();
             InitVertices();
+            camera.Initialize();
         }
 
         /// <summary>
@@ -138,36 +97,24 @@ namespace XNAlab6
         }
 
         /// <summary>
-        /// Position the camera.
-        /// </summary>
-        private void InitCamera()
-        {
-            //Projeksjon:
-            float aspectRatio = (float)graphics.GraphicsDevice.Viewport.Width / (float)graphics.GraphicsDevice.Viewport.Height;
-
-            //Oppretter view-matrisa:
-            Matrix.CreateLookAt(ref cameraPosition, ref cameraTarget, ref cameraUpVector, out view);
-
-            //Oppretter projeksjonsmatrisa:
-            Matrix.CreatePerspectiveFieldOfView(MathHelper.PiOver4, aspectRatio, 0.01f, 1000.0f, out projection);
-
-        }
-
-        /// <summary>
         /// Prepare the object vertices
         /// </summary>
         protected void InitVertices()
         {
-            // Set axis lines
-            xAxis[0] = new VertexPositionColor(new Vector3(-100.0f, 0f, 0f), Color.Red);
-            xAxis[1] = new VertexPositionColor(new Vector3(100.0f, 0f, 0f), Color.Red);
-            yAxis[0] = new VertexPositionColor(new Vector3(0f, -100.0f, 0f), Color.White);
-            yAxis[1] = new VertexPositionColor(new Vector3(0f, 100.0f, 0f), Color.White);
-            zAxis[0] = new VertexPositionColor(new Vector3(0f, 0f, -100.0f), Color.Black);
-            zAxis[1] = new VertexPositionColor(new Vector3(0f, 0f, 100.0f), Color.Black);
 
             // min and max for texture
             float min = 0.001f; float max = 0.999f;
+
+            bottomV = new VertexPositionColorTexture[4] {
+                new VertexPositionColorTexture(new Vector3(1, -1, 1),
+                    Color.Green, new Vector2(max,max)),
+                new VertexPositionColorTexture(new Vector3(-1, -1, 1),
+                    Color.Green, new Vector2(max,min)),
+                new VertexPositionColorTexture(new Vector3(1, -1, -1),
+                    Color.Green, new Vector2(min,min)),
+                new VertexPositionColorTexture(new Vector3(-1, -1, -1),
+                    Color.Green, new Vector2(min,max))
+            };
 
             // Front plane
             frontV = new VertexPositionColorTexture[4] {
@@ -222,53 +169,11 @@ namespace XNAlab6
                     Color.Green, new Vector2(max,max)),
                 new VertexPositionColorTexture(new Vector3(-1, 1, 1),
                     Color.Green, new Vector2(max,min)),
-                new VertexPositionColorTexture(new Vector3(-1, 1, -1),
-                    Color.Green, new Vector2(min,max)),
                 new VertexPositionColorTexture(new Vector3(1, 1, -1),
-                    Color.Green, new Vector2(min,min))
-            };
-
-            // Initialize a Cube
-            
-            cubeVertices = new VertexPositionColorTexture[8]
-            {
-                new VertexPositionColorTexture(new Vector3(1, -1,  1),
-                    Color.Blue, new Vector2(min,max)),
-                new VertexPositionColorTexture(new Vector3( 1,  1,  1),
-                    Color.Blue, new Vector2(min,min)),
-                new VertexPositionColorTexture(new Vector3(-1, -1,  1),
-                    Color.Red, new Vector2(max,max)),
-                new VertexPositionColorTexture(new Vector3(-1, 1,  1),
-                    Color.Red, new Vector2(max,min)),
-                new VertexPositionColorTexture(new Vector3(-1, -1, -1),
-                    Color.Green, new Vector2(min,max)),
-                new VertexPositionColorTexture(new Vector3(-1, 1, -1),
                     Color.Green, new Vector2(min,min)),
-                new VertexPositionColorTexture(new Vector3(1, -1, -1),
-                    Color.Yellow, new Vector2(max,max)),
-                new VertexPositionColorTexture(new Vector3(1, 1, -1),
-                    Color.Yellow, new Vector2(max,min))
+                new VertexPositionColorTexture(new Vector3(-1, 1, -1),
+                    Color.Green, new Vector2(min,max))
             };
-            cubeVertices2 = new VertexPositionColorTexture[8]
-            {
-                new VertexPositionColorTexture(new Vector3(1, -1, -1),
-                    Color.Green, new Vector2(min,max)),
-                new VertexPositionColorTexture(new Vector3(1, -1,  1),
-                    Color.Red, new Vector2(min,min)),
-                new VertexPositionColorTexture(new Vector3(1,  1, -1),
-                    Color.Yellow, new Vector2(max,max)),
-                new VertexPositionColorTexture(new Vector3( 1,  1,  1),
-                    Color.Blue, new Vector2(max,min)),
-                new VertexPositionColorTexture(new Vector3(-1,  1, -1),
-                    Color.Yellow, new Vector2(min,max)),
-                new VertexPositionColorTexture(new Vector3(-1,  1,  1),
-                    Color.Blue, new Vector2(min,min)),
-                new VertexPositionColorTexture(new Vector3(-1, -1, -1),
-                    Color.Green, new Vector2(max,max)),
-                new VertexPositionColorTexture(new Vector3(-1, -1,  1),
-                    Color.Red, new Vector2(max,min))
-            };
-
         }
 
         /// <summary>
@@ -291,14 +196,13 @@ namespace XNAlab6
                 effectView = effect.Parameters["View"];
                 effectProjection = effect.Parameters["Projection"];
 
-                effectRed = effect.Parameters["fx_Red"];
-                //effectPos = effect.Parameters["fx_Pos"];
-
                 // Load textures
                 texture1 = Content.Load<Texture2D>(@"Content/potato");
                 texture2 = Content.Load<Texture2D>(@"Content/turtle");
                 texture3 = Content.Load<Texture2D>(@"Content/uwp");
                 texture4 = Content.Load<Texture2D>(@"Content/underwater");
+                surfaceTexture = Content.Load<Texture2D>(@"Content/5980020-ocean-surface");
+                bottomTexture = Content.Load<Texture2D>(@"Content/hazelnut_lg");
 
                 // Load a video, and initialize a player
                 video = Content.Load<Video>(@"Content/uw");
@@ -338,81 +242,20 @@ namespace XNAlab6
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed)
                 this.Exit();
 
-            SetPos(gameTime);
-
             elapsedTime = (float)gameTime.ElapsedGameTime.TotalMilliseconds;
-
-            fpsCalc(gameTime);
-
             base.Update(gameTime);
-        }
-
-        // FPS calculation
-        void fpsCalc(GameTime gameTime)
-        {
-            fpsTime += gameTime.ElapsedGameTime;
-
-            if (fpsTime > TimeSpan.FromSeconds(1))
-            {
-                fpsTime -= TimeSpan.FromSeconds(1);
-                frameRate = frameCounter;
-                frameCounter = 0;
-            }
-        }
-
-        void SetPos(GameTime gameTime)
-        {
-            if (mbRedIncrease)
-                mfRed += (float)gameTime.ElapsedGameTime.Milliseconds / 1000.0f;
-            else
-                mfRed -= (float)gameTime.ElapsedGameTime.Milliseconds / 1000.0f;
-            if (mfRed <= 0.0f)
-                mbRedIncrease = true;
-            else if (mfRed >= 1.0f)
-                mbRedIncrease = false;
-
-            effectRed.SetValue(mfRed);
-        }
-
-        private void DrawAxis()
-        {
-            foreach (EffectPass pass in effect.CurrentTechnique.Passes)
-            {
-                pass.Apply();
-                GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, xAxis, 0, 1);
-                GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, yAxis, 0, 1);
-                GraphicsDevice.DrawUserPrimitives(PrimitiveType.LineList, zAxis, 0, 1);
-            }
-        }
-
-        private void DrawOverlayText(string text, int x, int y)
-        {
-            spriteBatch.Begin();
-            //Skriver teksten to ganger, først med gul bakgrunn og deretter med rød, en piksel ned og til venstre, slik at teksten får en skygge.
-            spriteBatch.DrawString(spriteFont, text, new Vector2(x, y), Color.Yellow);
-            spriteBatch.DrawString(spriteFont, text, new Vector2(x - 1, y - 1), Color.Red);
-            spriteBatch.End();
-
-            GraphicsDevice.BlendState = BlendState.Opaque;
-            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
-            GraphicsDevice.RasterizerState = RasterizerState.CullNone;
-            GraphicsDevice.SamplerStates[0] = SamplerState.LinearClamp;
         }
 
         private void DrawSide(VertexPositionColorTexture[] vertices, Texture2D texture)
         {
             Matrix matIdentify = Matrix.Identity;
-            Matrix scale, cubeTrans, orbRotatY;
+            Matrix rotatY;
 
-            Matrix.CreateScale(0.5f, 0.5f, 0.5f, out scale);
+            rotatY = Matrix.CreateRotationY(rotY);
+            rotY += (elapsedTime * speed) / 150f;
+            rotY = rotY % (float)(2 * Math.PI);
 
-            cubeTrans = Matrix.CreateTranslation(2f, 0f, -2f);
-
-            orbRotatY = Matrix.CreateRotationY(orbRotY);
-            orbRotY += (elapsedTime * speed) / 150f;
-            orbRotY = orbRotY % (float)(2 * Math.PI);
-
-            world = matIdentify *orbRotatY;
+            world = matIdentify * rotatY;
 
             GraphicsDevice.Textures[0] = texture;
 
@@ -453,15 +296,7 @@ namespace XNAlab6
             effectView.SetValue(camera.View);
             effectProjection.SetValue(camera.Projection);
 
-            //DrawAxis();
-            //DrawCube(cubeVertices, texture1);
-            //DrawCube(cubeVertices2, texture2);
-
             DrawSkyBox();
-
-            // Teller frames og viser FPS
-            frameCounter++;
-            DrawOverlayText(string.Format("FPS: {0}", frameRate), 5, 2);
 
             base.Draw(gameTime);
         }
@@ -474,10 +309,12 @@ namespace XNAlab6
             if (player.State == MediaState.Playing)
                 texture3 = player.GetTexture();
 
-            DrawSide(frontV, texture3);
-            DrawSide(leftV, texture3);
+            DrawSide(bottomV, bottomTexture);
             DrawSide(backV, texture1);
             DrawSide(rightV, texture2);
+            DrawSide(frontV, texture3);
+            DrawSide(leftV, texture3);
+            DrawSide(topV, surfaceTexture);
         }
         
     }
